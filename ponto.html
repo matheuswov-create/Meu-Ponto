@@ -3,7 +3,83 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Meu Ponto">
+<link rel="apple-touch-icon" href="icon.png">
 <title>Controle de Ponto</title>
+<script>
+// Generate icon dynamically and inject as apple-touch-icon
+(function(){
+  try {
+    const c = document.createElement('canvas');
+    c.width = 512; c.height = 512;
+    const ctx = c.getContext('2d');
+    // Background rounded rect
+    const r = 100;
+    ctx.beginPath();
+    ctx.moveTo(r, 0); ctx.lineTo(512-r, 0);
+    ctx.quadraticCurveTo(512, 0, 512, r);
+    ctx.lineTo(512, 512-r);
+    ctx.quadraticCurveTo(512, 512, 512-r, 512);
+    ctx.lineTo(r, 512);
+    ctx.quadraticCurveTo(0, 512, 0, 512-r);
+    ctx.lineTo(0, r);
+    ctx.quadraticCurveTo(0, 0, r, 0);
+    ctx.closePath();
+    const grad = ctx.createLinearGradient(0, 0, 512, 512);
+    grad.addColorStop(0, '#1a1d27');
+    grad.addColorStop(1, '#0f1117');
+    ctx.fillStyle = grad;
+    ctx.fill();
+    // Clock circle
+    ctx.beginPath();
+    ctx.arc(256, 256, 180, 0, Math.PI * 2);
+    ctx.strokeStyle = '#4f8ef7';
+    ctx.lineWidth = 22;
+    ctx.stroke();
+    // Hour markers
+    for(let i = 0; i < 12; i++){
+      const a = (i / 12) * Math.PI * 2 - Math.PI / 2;
+      const len = i % 3 === 0 ? 28 : 14;
+      ctx.beginPath();
+      ctx.moveTo(256 + Math.cos(a) * 152, 256 + Math.sin(a) * 152);
+      ctx.lineTo(256 + Math.cos(a) * (152 - len), 256 + Math.sin(a) * (152 - len));
+      ctx.strokeStyle = i % 3 === 0 ? '#e8eaf0' : '#6b7280';
+      ctx.lineWidth = i % 3 === 0 ? 10 : 6;
+      ctx.stroke();
+    }
+    // Hour hand (pointing ~10)
+    const ha = -Math.PI / 2 + (10/12) * Math.PI * 2;
+    ctx.beginPath();
+    ctx.moveTo(256, 256);
+    ctx.lineTo(256 + Math.cos(ha) * 100, 256 + Math.sin(ha) * 100);
+    ctx.strokeStyle = '#e8eaf0';
+    ctx.lineWidth = 16;
+    ctx.lineCap = 'round';
+    ctx.stroke();
+    // Minute hand (pointing ~2)
+    const ma = -Math.PI / 2 + (10/60) * Math.PI * 2;
+    ctx.beginPath();
+    ctx.moveTo(256, 256);
+    ctx.lineTo(256 + Math.cos(ma) * 140, 256 + Math.sin(ma) * 140);
+    ctx.strokeStyle = '#4f8ef7';
+    ctx.lineWidth = 12;
+    ctx.lineCap = 'round';
+    ctx.stroke();
+    // Center dot
+    ctx.beginPath();
+    ctx.arc(256, 256, 14, 0, Math.PI * 2);
+    ctx.fillStyle = '#4f8ef7';
+    ctx.fill();
+    // Inject as link
+    const link = document.createElement('link');
+    link.rel = 'apple-touch-icon';
+    link.href = c.toDataURL('image/png');
+    document.head.appendChild(link);
+  } catch(e){}
+})();
+</script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
 
@@ -510,6 +586,79 @@
   .pred-item.level-warn .pred-countdown { color: var(--yellow); }
   .pred-item.level-danger .pred-countdown { color: var(--red); }
   .pred-item.level-hit .pred-countdown { color: var(--red); }
+
+  /* DELETE & HISTORY EDIT */
+  .punch-btn .btn-row {
+    position: absolute; top: 6px; right: 6px;
+    display: flex; gap: 4px;
+  }
+  .punch-btn .icon-btn {
+    background: none; border: none;
+    font-size: 14px; cursor: pointer; padding: 2px;
+    line-height: 1;
+  }
+  .history-item { cursor: pointer; transition: border-color 0.2s; }
+  .history-item:hover { border-color: var(--accent); }
+  .history-item-footer {
+    display: flex; justify-content: space-between;
+    align-items: center; margin-top: 8px;
+  }
+  .history-del-btn {
+    background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.3);
+    color: var(--red); border-radius: 8px; font-size: 11px; font-weight: 600;
+    padding: 5px 10px; cursor: pointer;
+  }
+  .history-edit-btn {
+    background: rgba(79,142,247,0.12); border: 1px solid rgba(79,142,247,0.3);
+    color: var(--accent); border-radius: 8px; font-size: 11px; font-weight: 600;
+    padding: 5px 10px; cursor: pointer;
+  }
+
+  /* DAY EDIT MODAL */
+  .day-modal-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.75); z-index: 150;
+    align-items: flex-end; justify-content: center;
+  }
+  .day-modal-overlay.open { display: flex; }
+  .day-modal {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 20px 20px 0 0; padding: 20px;
+    width: 100%; max-width: 480px;
+  }
+  .day-modal-title { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+  .day-modal-date { font-size: 11px; color: var(--muted); font-family: var(--mono); margin-bottom: 16px; }
+  .day-field-row {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 12px;
+  }
+  .day-field-label { font-size: 12px; color: var(--muted); width: 110px; flex-shrink: 0; }
+  .day-field-input {
+    flex: 1; background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); font-family: var(--mono);
+    font-size: 15px; padding: 8px 10px; text-align: center;
+  }
+  .day-field-input:focus { outline: none; border-color: var(--accent); }
+  .day-field-clear {
+    background: none; border: none; font-size: 16px; cursor: pointer; padding: 4px;
+  }
+  .day-modal-sep { height: 1px; background: var(--border); margin: 14px 0; }
+  .day-modal-btns { display: flex; gap: 10px; }
+  .day-modal-btns .btn { flex: 1; }
+  .confirm-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.8); z-index: 250;
+    align-items: center; justify-content: center; padding: 30px;
+  }
+  .confirm-overlay.open { display: flex; }
+  .confirm-box {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 20px; padding: 24px; width: 100%; max-width: 340px; text-align: center;
+  }
+  .confirm-box h3 { font-size: 17px; font-weight: 700; margin-bottom: 8px; }
+  .confirm-box p { font-size: 13px; color: var(--muted); margin-bottom: 20px; }
+  .confirm-btns { display: flex; gap: 10px; }
+  .confirm-btns .btn { flex: 1; }
 </style>
 </head>
 <body>
@@ -566,25 +715,37 @@
         <div class="punch-icon">🟢</div>
         <div class="punch-label">Entrada</div>
         <div class="punch-time" id="time-entrada"><span class="punch-empty">--:--</span></div>
-        <button class="edit-btn" onclick="openEdit(event,'entrada')">✏️</button>
+        <div class="btn-row">
+          <button class="icon-btn" onclick="openEdit(event,'entrada')">✏️</button>
+          <button class="icon-btn" onclick="deletePunch(event,'entrada')">🗑️</button>
+        </div>
       </div>
       <div class="punch-btn" id="btn-saidaAlmoco" onclick="punch('saidaAlmoco')">
         <div class="punch-icon">🍽️</div>
         <div class="punch-label">Saída almoço</div>
         <div class="punch-time" id="time-saidaAlmoco"><span class="punch-empty">--:--</span></div>
-        <button class="edit-btn" onclick="openEdit(event,'saidaAlmoco')">✏️</button>
+        <div class="btn-row">
+          <button class="icon-btn" onclick="openEdit(event,'saidaAlmoco')">✏️</button>
+          <button class="icon-btn" onclick="deletePunch(event,'saidaAlmoco')">🗑️</button>
+        </div>
       </div>
       <div class="punch-btn" id="btn-retornoAlmoco" onclick="punch('retornoAlmoco')">
         <div class="punch-icon">🔔</div>
         <div class="punch-label">Retorno almoço</div>
         <div class="punch-time" id="time-retornoAlmoco"><span class="punch-empty">--:--</span></div>
-        <button class="edit-btn" onclick="openEdit(event,'retornoAlmoco')">✏️</button>
+        <div class="btn-row">
+          <button class="icon-btn" onclick="openEdit(event,'retornoAlmoco')">✏️</button>
+          <button class="icon-btn" onclick="deletePunch(event,'retornoAlmoco')">🗑️</button>
+        </div>
       </div>
       <div class="punch-btn" id="btn-saida" onclick="punch('saida')">
         <div class="punch-icon">🔴</div>
         <div class="punch-label">Saída</div>
         <div class="punch-time" id="time-saida"><span class="punch-empty">--:--</span></div>
-        <button class="edit-btn" onclick="openEdit(event,'saida')">✏️</button>
+        <div class="btn-row">
+          <button class="icon-btn" onclick="openEdit(event,'saida')">✏️</button>
+          <button class="icon-btn" onclick="deletePunch(event,'saida')">🗑️</button>
+        </div>
       </div>
     </div>
   </div>
@@ -743,6 +904,52 @@
 
 <!-- TOAST -->
 <div class="backup-toast" id="backup-toast"></div>
+
+<!-- DAY EDIT MODAL -->
+<div class="day-modal-overlay" id="dayEditModal">
+  <div class="day-modal">
+    <div class="day-modal-title">✏️ Editar dia</div>
+    <div class="day-modal-date" id="dayModalDate">--</div>
+    <div class="day-field-row">
+      <div class="day-field-label">🟢 Entrada</div>
+      <input type="time" class="day-field-input" id="dme-entrada">
+      <button class="day-field-clear" onclick="clearDayField('entrada')">🗑️</button>
+    </div>
+    <div class="day-field-row">
+      <div class="day-field-label">🍽️ Saída almoço</div>
+      <input type="time" class="day-field-input" id="dme-saidaAlmoco">
+      <button class="day-field-clear" onclick="clearDayField('saidaAlmoco')">🗑️</button>
+    </div>
+    <div class="day-field-row">
+      <div class="day-field-label">🔔 Retorno almoço</div>
+      <input type="time" class="day-field-input" id="dme-retornoAlmoco">
+      <button class="day-field-clear" onclick="clearDayField('retornoAlmoco')">🗑️</button>
+    </div>
+    <div class="day-field-row">
+      <div class="day-field-label">🔴 Saída</div>
+      <input type="time" class="day-field-input" id="dme-saida">
+      <button class="day-field-clear" onclick="clearDayField('saida')">🗑️</button>
+    </div>
+    <div class="day-modal-sep"></div>
+    <div class="day-modal-btns">
+      <button class="btn btn-danger btn-sm" onclick="confirmDeleteDay()">🗑️ Apagar dia</button>
+      <button class="btn btn-secondary" onclick="closeDayModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveDayModal()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- CONFIRM DELETE -->
+<div class="confirm-overlay" id="confirmOverlay">
+  <div class="confirm-box">
+    <h3>Apagar dia inteiro?</h3>
+    <p id="confirmText">Todos os registros deste dia serão removidos permanentemente.</p>
+    <div class="confirm-btns">
+      <button class="btn btn-secondary" onclick="closeConfirm()">Cancelar</button>
+      <button class="btn btn-danger" onclick="executeDeleteDay()">Apagar</button>
+    </div>
+  </div>
+</div>
 
 <script>
 // ── CONSTANTS ──────────────────────────────────────────────────────────────
@@ -1282,9 +1489,105 @@ function renderHistory() {
           <div class="history-punch-val ${d.saida?'':'miss'}">${d.saida||'--'}</div>
         </div>
       </div>
-      <div class="history-stats">${tags.join('')}</div>
+      <div class="history-item-footer">
+        <div class="history-stats">${tags.join('')}</div>
+        <div style="display:flex;gap:6px">
+          <button class="history-edit-btn" onclick="openDayModal('${key}')">✏️ Editar</button>
+          <button class="history-del-btn" onclick="confirmDeleteDayKey(event,'${key}')">🗑️</button>
+        </div>
+      </div>
     </div>`;
   }).join('');
+}
+
+// ── DELETE TODAY PUNCH ────────────────────────────────────────────────────
+function deletePunch(e, field) {
+  e.stopPropagation();
+  if (!today[field]) return;
+  delete today[field];
+  save();
+  renderToday();
+}
+
+// ── DAY EDIT MODAL ────────────────────────────────────────────────────────
+let dayEditKey = null;
+
+function openDayModal(key) {
+  dayEditKey = key;
+  const d = storage[key] || {};
+  document.getElementById('dayModalDate').textContent = formatDate(key);
+  ['entrada','saidaAlmoco','retornoAlmoco','saida'].forEach(f => {
+    document.getElementById('dme-'+f).value = d[f] || '';
+  });
+  document.getElementById('dayEditModal').classList.add('open');
+}
+
+function closeDayModal() {
+  document.getElementById('dayEditModal').classList.remove('open');
+  dayEditKey = null;
+}
+
+function clearDayField(field) {
+  document.getElementById('dme-'+field).value = '';
+}
+
+function saveDayModal() {
+  if (!dayEditKey) return;
+  const d = storage[dayEditKey] || {};
+  ['entrada','saidaAlmoco','retornoAlmoco','saida'].forEach(f => {
+    const val = document.getElementById('dme-'+f).value;
+    if (val) d[f] = val;
+    else delete d[f];
+  });
+  // If day is now empty, remove it
+  if (Object.keys(d).length === 0) {
+    delete storage[dayEditKey];
+  } else {
+    storage[dayEditKey] = d;
+  }
+  localStorage.setItem('ponto_v2', JSON.stringify(storage));
+  // Refresh today if editing today
+  if (dayEditKey === getKey()) {
+    today = storage[dayEditKey] || {};
+    renderToday();
+  }
+  closeDayModal();
+  renderHistory();
+  showToast('✅ Dia atualizado!');
+}
+
+function confirmDeleteDay() {
+  // Called from inside day modal
+  document.getElementById('confirmText').textContent =
+    `Apagar todos os registros de ${dayEditKey ? formatDate(dayEditKey) : 'este dia'}?`;
+  document.getElementById('dayEditModal').classList.remove('open');
+  document.getElementById('confirmOverlay').classList.add('open');
+}
+
+function confirmDeleteDayKey(e, key) {
+  e.stopPropagation();
+  dayEditKey = key;
+  document.getElementById('confirmText').textContent =
+    `Apagar todos os registros de ${formatDate(key)}?`;
+  document.getElementById('confirmOverlay').classList.add('open');
+}
+
+function executeDeleteDay() {
+  if (!dayEditKey) return;
+  delete storage[dayEditKey];
+  localStorage.setItem('ponto_v2', JSON.stringify(storage));
+  if (dayEditKey === getKey()) {
+    today = {};
+    renderToday();
+  }
+  closeConfirm();
+  renderHistory();
+  showToast('🗑️ Dia removido.');
+  dayEditKey = null;
+}
+
+function closeConfirm() {
+  document.getElementById('confirmOverlay').classList.remove('open');
 }
 
 // ── TABS ──────────────────────────────────────────────────────────────────
